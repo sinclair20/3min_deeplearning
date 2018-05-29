@@ -1,3 +1,572 @@
+import tensorflow as tf
+
+# tf.constant로 상수를 hello 변수에 저장
+hello = tf.constant('Hello, TensorFlow!')
+print(hello)
+# 결과 :
+# Tensor("Const:0", shape=(), dtype=string)
+
+# hello가 텐서플로의 텐서라는 자료형이고 상수를 담고 있음
+
+# 랭크가 0인 텐서; 셰이프는 []
+
+[1., 2., 3.]    # 랭크가 1인 텐서; 셰이프는 [3]
+[[1., 2., 3.], [4., 5., 6.]]    # 랭크가 2인 텐서; 셰이프는 [2, 3]
+[[[1., 2., 3.]], [[7., 8., 9]]] # 랭크가 3인 텐서; 셰이프는 [2, 1, 3]
+
+# 랭크는 차원의 수를 의미
+# 랭크가 0이면 스칼라, 1이면 벡터, 2면 행렬, 3이상이면 n-Tensor 또는 n차원 텐서라고 부름
+# 셰이프는 각 차원의 요소 개수로 텐서의 구조를 설명해줌
+
+# 텐서를 출력할때 나오는 dtype은 해당 텐서에 담긴 요소들의 자료형 - string, float, int 등..
+
+# 텐서를 이용해 다양한 연산 가능
+a = tf.constant(10)
+b = tf.constant(32)
+c = tf.add(a,b)
+
+print(c)
+
+
+# 그래프는 텐서들의 연산 모음
+# 텐서플로는 지연실행 방식
+# : 텐서플로는 텐서와 텐서의 연산들을 먼저 정의하여 그래프를 만들고 이후 필요한 연산을
+# 실행하는 코드를 넣어 원하는 시점에 실제 연산을 수행하도록 함.
+
+#그래프의 실행은 Session() 안에서 이루어 져야 하며 다음과 같이 Session 객체와 run 메서드 사용
+sess = tf.Session()
+print(sess.run(hello))
+print(sess.run([a,b,c]))
+
+sess.close()
+
+
+
+
+# 플레이스홀더
+# : 그래프에 사용할 입력값을 나중에 받기 위해 사용하는 매개변수
+
+# 변수
+# : 그래프를 최적화하는 용도로 텐서플로가 학습한 결과를 갱신하기 위해 사용하는 변수
+# 이 변수의 값들이 신경망의 성능을 좌우함
+
+X = tf.placeholder(tf.float32, [None, 3])   # None은 크기가 정해지지 않음을 의미
+print(X)
+
+# 앞서 텐서의 모양을 (?, 3)으로 정의했으므로 두번째 차원은 요소를 3개씩 가지고 있어야 함.
+x_data = [[1, 2, 3], [4, 5, 6]]
+
+# W와 b에 각각 텐서플로의 변수를 생성하여 할당
+# W는 [3,2] 행렬 형태의 텐서, b는 [2,1] 행렬 형태의 텐서로 tf.random_normal 함수를 이용해 정규 분포 형태의 무작위 값으로 초기화
+W = tf.Variable(tf.random_normal([3, 2]))
+b = tf.Variable(tf.random_normal([2, 1]))
+
+W = tf.Variable([[0.1, 0.1], [0.2, 0.2], [0.3, 0.3]])
+
+expr = tf.matmul(X, W) + b
+
+# 이제 연산을 실행하고 결과를 출력하여 설정한 텐서들과 계산된 그래프의 결과를 확인
+sess = tf.Session()
+
+# 앞에서 정의한 변수들을 초기화 하는 함수
+# 기존에 학습한 값들을 가져와서 사용하는 것이 아닌 처음 실행하는 것이라면 연산을 실행하기전에
+# 반드시 이 함수를 이용해 변수들을 초기화 해야 함.
+sess.run(tf.global_variables_initializer())
+
+print('=== x_data ===')
+print(x_data)
+print('=== W ===')
+print(sess.run(W))
+print('=== b ===')
+print(sess.run(b))
+print('=== expr ===')
+print(sess.run(expr, feed_dict={X: x_data})) # feed_dict 매개변수는 그래프를 실행할 때 사용할 입력값을 지정.
+# expr 수식에는 X, W, b를 사용했는데 이중 X가 플레이스홀더라 X에 값을 넣어주지 않으면 계산에 사용할 값이 없으므로 에러발생. 따라서 미리 정의 해둔 x_data를 X의 값으로 넣어줌
+
+sess.close()
+
+
+
+
+''' 선형회귀 모델 구현하기'''
+
+x_data = [1,2,3]
+y_data = [1,2,3]
+
+W = tf.Variable(tf.random_uniform([1], -1.0, 1.0))
+b = tf.Variable(tf.random_uniform([1], -1.0, 1.0))
+
+X = tf.placeholder(tf.float32, name='X')
+Y = tf.placeholder(tf.float32, name='Y')
+
+hypothesis = W * X + b
+
+# 손실함수, 비용함수
+# : 한 쌍(x, y)의 데이터에 대한 손실값을 계산하는 함수
+# 손실값이란 실제값과 모델로 예측한 값이 얼마나 차이가 나타내는 값
+# 즉 손실값이 작을수록 그 모델이 X와  Y의 관계를 잘 설명하고 있다는 뜻.
+# 이 손실을 전체 데이터에 대해 구한 경우 이를 비용(cost) or 손실(loss)라고 함.
+cost = tf.reduce_mean(tf.square(hypothesis - Y))
+
+
+# 경사하강법 최적화 함수를 이용해 손실값을 최소화하는 연산 그래프 생성
+# 최적화 함수란 가중치와 편향값을 변경해가면서 손실값을 최소화하는 가장 최적화된 가중치와 편향 값을 찾아주는 함수. 이때 무작위로 값들을 변경하면 시간이 너무 오래걸리므로 빠르게 최적화 하기 위한 즉, 빠르게 학습하기 위한 다양한 방법 사용.  ex) 경사하강법
+
+# 최적화 함수의 매개변수인 learning_rate (학습률) 은 학습을 얼마나 급하게 할것인가를 설정하는 값.  - 하이퍼파라미터중 하나
+optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.1)
+train_op = optimizer.minimize(cost)
+
+
+# 이제 선형회귀 모델을 다 만들었으니 그래프를 실행해 학습시키고 결과를 확인
+# 파이썬의 with 기능 이용해 세션블록을 만들고 세션을 자동 종료로 처리하도록 만듬
+with tf.Session() as sess:
+    sess.run(tf.global_variables_initializer())
+
+# 최적화를 수행하는 그래프인 train_op를 실행하고 실행시마다 변환하는 손실값을 출력하는 코드
+# 학습은 100번 수행, feed_dict 매개변수를 통해, 상관관계를 알아내고자하는 데이턴인
+# x_data와 y_data를 입력해줌.
+    for step in range(100):
+        _, cost_val = sess.run([train_op, cost], feed_dict={X: x_data,
+                                                            Y: y_data})
+        print(step, cost_val, sess.run(W), sess.run(b))
+
+    # 학습에 사용되지 않았던 값인 5와 2.5를 X값으로 넣고 결과를 확인
+    print("X: 5, Y: ", sess.run(hypothesis, feed_dict={X: 5}))
+    print("X: 2.5, Y: ", sess.run(hypothesis, feed_dict={X: 2.5}))
+
+
+
+
+''' 분류 모델 구현하기 '''
+import numpy as np
+
+# 학습에 사용할 데이터 정의
+x_data = np.array(
+    [[0,0], [1,0], [1, 1], [0, 0], [0, 0], [0, 1]])
+
+# 레이블 데이터는 원-핫 인코딩으로 구성함
+# y_data 를 원핫 인코딩 형태로 만듬
+y_data = np.array([
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+    [1, 0, 0],
+    [1, 0, 0],
+    [0, 0, 1]
+])
+
+X = tf.placeholder(tf.float32)
+Y = tf.placeholder(tf.float32)
+
+W = tf.Variable(tf.random_uniform([2, 3], -1., 1.))
+b = tf.Variable(tf.zeros([3]))
+
+L = tf.add(tf.matmul(X, W), b)
+L = tf.nn.relu(L)
+
+model = tf.nn.softmax(L)
+
+# 손실함수는 원-핫 인코딩을 이용한 대부분의 모델에서 교차 엔트로피 함수 사용
+# 교차 엔트로피 값은 예측값과 실제 값 사이의 확률 분포 차이를 계산한 값
+cost = tf.reduce_mean(-tf.reduce_sum(Y * tf.log(model), axis=1))
+
+# 경사하강법으로 초기화
+optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.01)
+train_op = optimizer.minimize(cost)
+
+# 텐서플로의 세션 초기화
+init = tf.global_variables_initializer()
+sess = tf.Session()
+sess.run(init)
+
+# 앞서 구성한 특징과 레이블 데이터를 이용해 학습을 100번 진행
+for step in range(100):
+    sess.run(train_op, feed_dict={X: x_data, Y: y_data})
+
+    # 학습 도중 10번에 한번씩 손실값을 출력
+    if (step + 1) % 10 == 0:
+        print(step + 1, sess.run(cost, feed_dict={X: x_data, Y: y_data}))
+
+# 학습된 결과를 확인하는 코드
+prediction = tf.argmax(model, axis=1)
+target = tf.argmax(Y, axis=1)
+print('예측값: ', sess.run(prediction, feed_dict={X: x_data}))
+print('실제값: ', sess.run(target, feed_dict={Y: y_data}))
+
+
+is_correct = tf.equal(prediction, target)
+
+accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+print('정확도: %.2f' % sess.run(accuracy * 100, feed_dict={X: x_data, Y: y_data}))
+
+W1 = tf.Variable(tf.random_uniform([2, 10], -1., 1.))
+W2 = tf.Variable(tf.random_uniform([10, 3], -1., 1.))
+
+b1 = tf.Variable(tf.zeros([10]))
+b2 = tf.Variable(tf.zeros([3]))
+
+# 가중치
+W1 = [2, 10]   # [특징, 은닉층의 뉴련수]
+W2 = [10, 3]   # [은닉층의 뉴런수, 분류수]
+
+# 편향
+b1 = [10]
+b2 = [3]
+
+# L1 = tf.add(tf.matmul(X, W1), b1)
+# L1 = tf.nn.relu(L1)
+#
+# model = tf.add(tf.matmul(L1, W2), b2)
+#
+# cost = tf.reduce_mean(
+#     tf.nn.softmax_cross_entropy_with_logits(labels=Y, logits=model))
+#
+# optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+# train_op = optimizer.minimize(cost)
+#
+
+
+
+
+
+
+'''텐서보드와 모델 재사용'''
+data = np.loadtxt('./data.csv', delimiter=',',
+                  unpack=True, dtype='float32')
+print(data)
+x_data = np.transpose(data[0:2])
+y_data = np.transpose(data[2:])
+print("x_data\n",x_data)
+print(y_data)
+
+# 모델을 저장할때 쓸 변수 하나 만들기
+# 이 변수는 직접 학습에 사용되지 않고 학습을 카운트 하는 변수. <= trainable=False
+global_step = tf.Variable(0, trainable=False, name='global_step')
+
+#
+X = tf.placeholder(tf.float32)
+Y = tf.placeholder(tf.float32)
+
+W1 = tf.Variable(tf.random_uniform([2, 10], -1., 1.))
+L1 = tf.nn.relu(tf.matmul(X, W1))
+
+# W2의 shape 는 앞단 계층의 출력크기가 10이고 뒷단 계층의 입력크기가 20이기 때문 = [10,20]
+W2 = tf.Variable(tf.random_uniform([10, 20], -1., 1.))
+L2 = tf.nn.relu(tf.matmul(L1, W2))
+
+W3 = tf.Variable(tf.random_uniform([20, 3], -1., 1.))
+model = tf.matmul(L2, W3)
+
+cost = tf.reduce_mean(
+    tf.nn.softmax_cross_entropy_with_logits(labels=Y, logits=model))
+
+optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+# global_step 매개변수에 앞서 정의한 global_step 변수를 넘겨줌. 이렇게 하면 최적화 함수가
+# 학습용 변수들을 최적화 할때마다 global_step 변수의 값을 1씩 증가 시킴
+train_op = optimizer.minimize(cost, global_step=global_step)
+
+
+# 모델 구성이 모두 끝났으니 이제 세션을 열고 최적화 실행하기
+sess = tf.Session()
+saver = tf.train.Saver(tf.global_variables())
+
+# ./model 디렉터리에 기존에 학습해둔 모델이 있는 지를 확인해서 모델이 있다면 saver.restore 함수를 사용해 학습된 값들을 불러오고, 아니면 변수를 새로 초기화함.
+# 학습된 모델을 저장한 파일을 체크포인트 파일 이라고 함.
+ckpt = tf.train.get_checkpoint_state('./model')
+if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
+    saver.restore(sess, ckpt.model_checkpoint_path)
+else:
+    sess.run(tf.global_variables_initializer())
+
+for step in range(2):
+    sess.run(train_op, feed_dict={X: x_data, Y: y_data})
+
+    print('Step: %d, ' % sess.run(global_step),
+          'Cost: %.3f' % sess.run(cost, feed_dict={X: x_data, Y: y_data}))
+
+saver.save(sess, './model/dnn.ckpt', global_step=global_step)
+
+prediction = tf.argmax(model, 1)
+target = tf.argmax(Y, 1)
+print('예측값:', sess.run(prediction, feed_dict={X: x_data}))
+print('실제값:', sess.run(target, feed_dict={Y: y_data}))
+
+is_correct = tf.equal(prediction, target)
+accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+print('정확도: %.2f' % sess.run(accuracy * 100, feed_dict={X: x_data,
+                                                           Y: y_data}))
+
+
+'''텐서보드 사용하기'''
+
+# 딥러닝 학습시간이 김 => 모델을 효과적으로 실험하려면 학습과정을 추적하는 일이 매우중요
+# => 이런 어려움을 해결해주고자 텐서플로는 텐서보드라는 도구를 기본으로 제공
+# 텐서보드는 학습하는 중간중간 손실값이나 정확도 또는 결과물이 나온 이미지나 사운드파일들을 다양한 방식으로 시각화해 보여줌.
+
+import tensorflow as tf
+import numpy as np
+
+data = np.loadtxt('./data.csv', delimiter=',',
+                  unpack=True, dtype='float32')
+
+x_data = np.transpose(data[0:2])
+y_data = np.transpose(data[2:])
+
+global_step = tf.Variable(0, trainable=False, name='global_step')
+
+X = tf.placeholder(tf.float32)
+Y = tf.placeholder(tf.float32)
+
+
+with tf.name_scope('layer1'):
+    W1 = tf.Variable(tf.random_uniform([2, 10], -1., 1.), name='W1')
+    L1 = tf.nn.relu(tf.matmul(X, W1))
+
+with tf.name_scope('layer2'):
+    W2 = tf.Variable(tf.random_uniform([10, 20], -1., 1.), name='W2')
+    L2 = tf.nn.relu(tf.matmul(L1, W2))
+
+with tf.name_scope('layer1'):
+    W3 = tf.Variable(tf.random_uniform([20, 3], -1., 1.), name='W3')
+    model = tf.matmul(L2, W3)
+
+with tf.name_scope('optimizer'):
+    cost = tf.reduce_mean(
+        tf.nn.softmax_cross_entropy_with_logits(labels=Y, logits=model))
+
+    optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+    train_op = optimizer.minimize(cost, global_step=global_step)
+
+# 손실값을 추적하기위해 수집할 값을 지정하는 코드 작성
+# tf.summary 모듈의  scalar 함수는 값이 하나인 텐서를 수집할때 사용.
+    tf.summary.scalar('cost', cost)
+tf.global_variables_initializer()
+sess = tf.Session()
+
+saver = tf.train.Saver(tf.global_variables())
+
+ckpt = tf.train.get_checkpoint_state('./model')
+if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
+    saver.restore(sess, ckpt.model_checkpoint_path)
+else:
+    sess.run(tf.global_variables_initializer())
+
+# tf.summary.merge_all 함수로 앞서 지정한 텐서들을 수집
+# tf.summary.FileWriter 함수를 이용해 그래프와 텐서들의 값을 저장할 디렉터리 설정
+merged = tf.summary.merge_all()
+writer = tf.summary.FileWriter('./logs', sess.graph)
+
+# 최적화 실행하는 코드
+for step in range(100):
+    sess.run(train_op, feed_dict={X: x_data, Y: y_data})
+
+    print('Step: %d, ' % sess.run(global_step),
+          'Cost: %.3f' % sess.run(cost, feed_dict={X: x_data, Y: y_data}))
+
+# sess.run을 이용해 앞서 merged로 모아둔 텐서의 값들을 계산하여 수집한뒤,
+# writer.add_summary 함수를 이용해 해당 값들을 앞서 지정한 디렉터리에 저장
+# 나중에 확인할수 있도록 global_step 값을 이용해 수집한 시점을 기록해 둠.
+    summary = sess.run(merged, feed_dict={X: x_data, Y: y_data})
+    writer.add_summary(summary, global_step=sess.run(global_step))
+
+
+saver.save(sess, './model/dnn.ckpt', global_step=global_step)
+
+prediction = tf.argmax(model, 1)
+target = tf.argmax(Y, 1)
+print('예측값: ', sess.run(prediction, feed_dict={X: x_data}))
+print('실제값: ', sess.run(target, feed_dict={Y: y_data}))
+
+is_correct = tf.equal(prediction, target)
+accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+print('정확도: %.2f'  % sess.run(accuracy * 100, feed_dict={X: x_data, Y: y_data}))
+
+
+
+
+
+''' MNIST '''
+
+from tensorflow.examples.tutorials.mnist import input_data
+mnist = input_data.read_data_sets('./mnist/data/', one_hot=True)
+
+
+# MNIST의 손글씨 이미지는 28x28 픽셀로 이루어짐. 즉, 784개의 특징으로 이루어져 있음.
+# 그리고 레이블은 0부터 9까지이므로 10개의 분류로 나눔
+# 입력과 출력인 X와 Y를 다음과 같이 정의함.
+
+# 이미지를 하나씩 학습시키는것보다 여러개를 한꺼번에 학습시키는 쪽이 효과가 좋지만 그만큼 많은 메모리와
+# 높은 컴퓨팅 성능이 뒷받침 되야함 => 데이터를 적당한 크기로 잘라서 학습 시킴 : 미니배치
+# X와 Y코드에서 텐서의 첫번째 차원이 None으로 되어 있는 것을 볼수 있는데 이 자리에는 한번에 학습시킬
+# MNIST 이미지의 개수를 지정하는 값이 들어감.
+# 원하는 배치 크기로 정확히 명시해줘도 되지만 한번에 학습할 개수를 계속 바꿔가면서 실험해 보려는 경우
+# None으로 넣어주면 텐서플로가 알아서 계산함.
+X = tf.placeholder(tf.float32, [None, 784])
+Y = tf.placeholder(tf.float32, [None, 10])
+
+
+W1 = tf.Variable(tf.random_normal([784, 256], stddev=0.01))
+L1 = tf.nn.relu(tf.matmul(X, W1))
+
+# tf.Variable(tf.random_normal([256, 256], stddev=0.01)) 함수는 표준편차가 0.01인 정규분포를 가지는 임의의
+# 값으로 뉴런(변수)를 초기화 시킴
+W2 = tf.Variable(tf.random_normal([256, 256], stddev=0.01))
+L2 = tf.nn.relu(tf.matmul(L1, W2))
+
+
+# 마지막 계층인 model 텐서에 W3 변수를 곱함으로써 요소 10개짜리 배열이 출력됨.
+# 10개의 요소는 0~9까지의 숫자를 나타냄. 가장 큰값을 가진 인덱스가 예측결과에 가까운 숫자
+# 출력층에는 보통 활성화 함수 사용하지 않음
+W3 = tf.Variable(tf.random_normal([256, 10], stddev=0.01))
+model = tf.matmul(L2, W3)
+
+# tf.nn.softmax_cross_entropy_with_logits 함수를 이용하여 각 이미지에 대한 손실값(실제값과 예측값의 차이)를 구하고
+# tf.reduce_mean 함수를 이용해 미니배치의 평균 손실값을 구함.
+# tf.train.AdamOptimizer 함수를 이용해 이 손실값을 최소화하는 최적화를 수행하도록 그래프를 구성
+cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=model, labels=Y))
+optimizer = tf.train.AdamOptimizer(0.001).minimize(cost)
+
+# 앞에서 구성한 신경망 모델을 초기화하고 학습을 진행할 세션을 시작
+init = tf.global_variables_initializer()
+sess = tf.Session()
+sess.run(init)
+
+# MNIST 는 데이터수가 수만개로 매우 크므로 미니배치 방식으로 학습
+batch_size = 100      # 미니배치의 크기는 100개
+total_batch = int(mnist.train.num_examples / batch_size)     # mnist.train.num_examples를 배치크기로 나눠
+#  미니배치가 총 몇개인지를 저장해둠
+
+# MNIST 데이터 전체를 학습하는 일을 총 15번 반복 ( 학습데이터 전체를 한바퀴 도는 것 = epoch )
+for epoch in range(15):
+    total_cost = 0
+
+# mnist.train.next_batch -> 학습할 데이터를 배치크기만큼 가져온뒤, 입력값인 이미지 데이터는 batch_xs에
+# 출력값인 레이블 데이터는 batch_ys에 저장.
+    for i in range(total_batch):
+        batch_xs, batch_ys = mnist.train.next_batch(batch_size)
+
+# sess.run을 이용해 최적화 시키고 손실값을 가져와 저장
+# 이때 feed_dict 매개변수에 입력값 X와 예측을 평가할 실제 레이블값 Y에 사용할 데이터를 넣어줌.
+        _, cost_val = sess.run([optimizer, cost])
+        feed_dict = {X: batch_xs, Y: batch_ys}
+# 그리고 손실값을 저장한후, 한세대의 학습이 끝나면 학습한 세대의 평균 손실값을 출력함.
+        total_cost += cost_val
+
+    print('Epoch:', '%04d' % (epoch + 1),
+          'Avg. cost = ', '{:.3f}'.format(total_cost / total_batch))
+
+print('최적화 완료')
+
+
+# 예측결과인 model의 값과 실제 레이블인 Y의 값을 비교
+# 예측한 결과값은 원-핫 인코딩 형식이며 각 인덱스에 해당하는 값은 다음처럼 해당숫자가 얼마나 해당인덱스와 관련이 높은가를 나타냄.
+# 이것은 손실값을 softmax_cross_entropy_with_logits를 이용해 구했기 떄문.
+# tf.argmax(model, 1) 은 두번째 차원(1번 인덱스의 차원)의 값 중 최댓값의 인덱스를 뽑아내는 함수.
+# model로 출력한 결과는 [None, 10]처럼 결과값을 배치 크기만큼 가지고 있음
+is_correct = tf.equal(tf.argmax(model, 1), tf.argmax(Y, 1))
+
+# tf.cast 이용해 is_correct를 0과 1로 변환 그리고 변환한 값들을 tf.reduce_mean을 이요해 평균을 내면 그것이 바로 정확도(확률)이 됨
+accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+
+# 테스트 데이터를 다루는 객체인 mnist.test 를 이용해 테스트 이미지와 레이블 데이터를 넣어 accuracy를 계산
+print('정확도: ', sess.run(accuracy,
+                        feed_dict={X: mnist.test.images,
+                                   Y: mnist.test.labels}))
+
+
+
+
+
+'''드롭아웃'''
+
+# 오버피팅 방지에 굉장히 효과적인 기술: 드롭아웃
+# 학습시 전체 신경망중 일부만을 사용하는 방법으로 학습단계마다 일부 뉴런을 사용하지 않도록 함으로써 일부 특징이 특정뉴런들에 고정되는 것을 막아 가중치의 균형을 잡도록 하여 과적합 방지. 다만 학습시 일부 뉴런을 학습시키지 않기 때문에 학습시간은 조금 더 오래걸림.
+
+
+# 앞에서 만든 손글씨 인식모델에 드롭아웃 기법 적용하기
+
+# 계층구성의 마지막층에 tf.nn.dropout 함수를 사용하면 됨.
+
+W1 = tf.Variable(tf.random_normal([784, 256], stddev=0.01))
+L1 = tf.nn.relu(tf.matmul(X, W1))
+L1 = tf.nn.dropout(L1, 0.8)
+
+W2 = tf.Variable(tf.random_normal([256, 256], stddev=0.01))
+L2 = tf.nn.relu(tf.matmul(L1, W2))
+L2 = tf.nn.dropout(L2, 0.8)
+
+
+
+# 드롭아웃 기법을 사용해 학습하더라도, 학습이 끝난뒤 예측시에는 신경망 전체를 사용해 주어야함. 따라서 keep_prob라는 플레이스홀더를 만들어 학습시에는 0.8을 넣어 드롭아웃을 사용하고 예측시에는 1을 넣어 신경망 전체를 사용하도록 만듬.
+
+keep_prob = tf.placeholder(tf.float32)
+
+W1 = tf.Variable(tf.random_normal([784, 256], stddev=0.01))
+L1 = tf.nn.relu(tf.matmul(X, W1))
+L1 = tf.nn.dropout(L1, keep_prob)
+
+W2 = tf.Variable(tf.random_normal([256, 256], stddev=0.01))
+L2 = tf.nn.relu(tf.matmul(L1, W2))
+L2 = tf.nn.dropout(L2, keep_prob)
+
+# 학습 코드 : keep_prob를 0.8로 넣어줌.
+_, cost_val = sess.run([optimizer, cost],
+                       feed_dict={X: batch_xs, Y: batch_ys,
+                                  keep_prob: 0.8})
+
+# 예측코드 : keep_prob 을 1로 넣어줌
+print('정확도: ', sess.run(accuracy, feed_dict={X: mnist.test.images,
+                                             Y: mnist.test.labels,
+                                             keep_prob: 1}))
+
+# 드롭아웃 기법을 적용한뒤 학습을 진행해보면 드롭아웃을 적용하지 않을떄와 별 차이 없음
+# 이유는 드롭아웃 방식으로 인해 학습이 느리게 진행되었기 때문 그렇다면 학습 세대(epoch)를
+# 30번으로 늘려 학습을 해보면 결과가 더 좋게 나옴.
+
+
+''' 배치 정규화 '''
+# 이 기법은 과적합을 막아줄 뿐아니라 학습속도도 향상시켜주는 장점으로 드롭아웃보다 자주사용됨.
+# tf.nn.batch_nomalization 과 tf.layers.batch_normalization 함수로 쉽게 적용가능
+
+
+
+'''matplotlib'''
+
+import matplotlib.pyplot as plt
+
+
+# 테스트 데이터를 이용해 예측 모델을 실행하고 결괏값을 labels에 저장
+labels = sess.run(model, feed_dict={X: mnist.test.images,
+                                    Y: mnist.test.labels,
+                                    keep_prob: 1})
+
+# 그런 다음 손글씨를 출력할 그래프를 준비
+fig = plt.figure()
+
+# 테스트 데이터의 첫번째부터 열번째까지의 이미지와 예측한 값을 출력
+for i in range(10):
+    # 2행 5열의 그래프를 만들고, i+1번째에 숫자이미지를 출력
+    subplot = fig.add_subplot(2, 5, i+1)
+    # 이미지를 깨끗하게 출력하기 위해 x와 y의 눈금을 출력하지 않음
+    subplot.set_xticks([])
+    subplot.set_yticks([])
+    # 출력한 이미지 위에 예측한 숫자 출력
+    # np.argmax는 tf.argmax와 같은 기능의 함수
+    # 결과값인 labels의 i번째 요소가 원-핫 인코딩형식으로 되어있으므로 해당 배열에서 가장 높은 값을 가진 인덱스를 예측한 숫자로 출력
+    subplot.set_title('%d' % np.argmax(labels[i]))
+    # 1차원 배열로 되어있는 i번째 이미지 데이터를 28x28형식의 2차원 배열로 변형하여 이미지 형태로 출력
+    # cmap 파라미터를 통해 이미지를 그레이스케일로 출력
+    subplot.imshow(mnist.test.images[i].reshape((28,28)),
+                   cmap=plt.cm.gray_r)
+
+plt.show()
+
+
+
+
+
+
+
 '''CNN'''
 '''
 CNN 모델은 기본적으로 컨볼루션 계층(합성곱 계층)과 풀링계층 으로 구성됨.
