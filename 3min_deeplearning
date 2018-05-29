@@ -337,9 +337,12 @@ with tf.name_scope('optimizer'):
     optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
     train_op = optimizer.minimize(cost, global_step=global_step)
 
+# 손실값을 추적하기위해 수집할 값을 지정하는 코드 작성
+# tf.summary 모듈의  scalar 함수는 값이 하나인 텐서를 수집할때 사용.
     tf.summary.scalar('cost', cost)
-
+tf.global_variables_initializer()
 sess = tf.Session()
+
 saver = tf.train.Saver(tf.global_variables())
 
 ckpt = tf.train.get_checkpoint_state('./model')
@@ -348,16 +351,21 @@ if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
 else:
     sess.run(tf.global_variables_initializer())
 
+# tf.summary.merge_all 함수로 앞서 지정한 텐서들을 수집
+# tf.summary.FileWriter 함수를 이용해 그래프와 텐서들의 값을 저장할 디렉터리 설정
 merged = tf.summary.merge_all()
 writer = tf.summary.FileWriter('./logs', sess.graph)
 
-
+# 최적화 실행하는 코드
 for step in range(100):
     sess.run(train_op, feed_dict={X: x_data, Y: y_data})
 
     print('Step: %d, ' % sess.run(global_step),
           'Cost: %.3f' % sess.run(cost, feed_dict={X: x_data, Y: y_data}))
 
+# sess.run을 이용해 앞서 merged로 모아둔 텐서의 값들을 계산하여 수집한뒤,
+# writer.add_summary 함수를 이용해 해당 값들을 앞서 지정한 디렉터리에 저장
+# 나중에 확인할수 있도록 global_step 값을 이용해 수집한 시점을 기록해 둠.
     summary = sess.run(merged, feed_dict={X: x_data, Y: y_data})
     writer.add_summary(summary, global_step=sess.run(global_step))
 
@@ -449,15 +457,107 @@ for epoch in range(15):
 
 print('최적화 완료')
 
+
+# 예측결과인 model의 값과 실제 레이블인 Y의 값을 비교
+# 예측한 결과값은 원-핫 인코딩 형식이며 각 인덱스에 해당하는 값은 다음처럼 해당숫자가 얼마나 해당인덱스와 관련이 높은가를 나타냄.
+# 이것은 손실값을 softmax_cross_entropy_with_logits를 이용해 구했기 떄문.
+# tf.argmax(model, 1) 은 두번째 차원(1번 인덱스의 차원)의 값 중 최댓값의 인덱스를 뽑아내는 함수.
+# model로 출력한 결과는 [None, 10]처럼 결과값을 배치 크기만큼 가지고 있음
 is_correct = tf.equal(tf.argmax(model, 1), tf.argmax(Y, 1))
-print('정확도 : ',sess.run(accuracy, feed_dict={X: mnist.test.images,
-                                            Y: mnist.test.labels}))
+
+# tf.cast 이용해 is_correct를 0과 1로 변환 그리고 변환한 값들을 tf.reduce_mean을 이요해 평균을 내면 그것이 바로 정확도(확률)이 됨
+accuracy = tf.reduce_mean(tf.cast(is_correct, tf.float32))
+
+# 테스트 데이터를 다루는 객체인 mnist.test 를 이용해 테스트 이미지와 레이블 데이터를 넣어 accuracy를 계산
+print('정확도: ', sess.run(accuracy,
+                        feed_dict={X: mnist.test.images,
+                                   Y: mnist.test.labels}))
 
 
 
 
 
+'''드롭아웃'''
+
+# 오버피팅 방지에 굉장히 효과적인 기술: 드롭아웃
+# 학습시 전체 신경망중 일부만을 사용하는 방법으로 학습단계마다 일부 뉴런을 사용하지 않도록 함으로써 일부 특징이 특정뉴런들에 고정되는 것을 막아 가중치의 균형을 잡도록 하여 과적합 방지. 다만 학습시 일부 뉴런을 학습시키지 않기 때문에 학습시간은 조금 더 오래걸림.
+
+
+# 앞에서 만든 손글씨 인식모델에 드롭아웃 기법 적용하기
+
+# 계층구성의 마지막층에 tf.nn.dropout 함수를 사용하면 됨.
+
+W1 = tf.Variable(tf.random_normal([784, 256], stddev=0.01))
+L1 = tf.nn.relu(tf.matmul(X, W1))
+L1 = tf.nn.dropout(L1, 0.8)
+
+W2 = tf.Variable(tf.random_normal([256, 256], stddev=0.01))
+L2 = tf.nn.relu(tf.matmul(L1, W2))
+L2 = tf.nn.dropout(L2, 0.8)
 
 
 
+# 드롭아웃 기법을 사용해 학습하더라도, 학습이 끝난뒤 예측시에는 신경망 전체를 사용해 주어야함. 따라서 keep_prob라는 플레이스홀더를 만들어 학습시에는 0.8을 넣어 드롭아웃을 사용하고 예측시에는 1을 넣어 신경망 전체를 사용하도록 만듬.
+
+keep_prob = tf.placeholder(tf.float32)
+
+W1 = tf.Variable(tf.random_normal([784, 256], stddev=0.01))
+L1 = tf.nn.relu(tf.matmul(X, W1))
+L1 = tf.nn.dropout(L1, keep_prob)
+
+W2 = tf.Variable(tf.random_normal([256, 256], stddev=0.01))
+L2 = tf.nn.relu(tf.matmul(L1, W2))
+L2 = tf.nn.dropout(L2, keep_prob)
+
+# 학습 코드 : keep_prob를 0.8로 넣어줌.
+_, cost_val = sess.run([optimizer, cost],
+                       feed_dict={X: batch_xs, Y: batch_ys,
+                                  keep_prob: 0.8})
+
+# 예측코드 : keep_prob 을 1로 넣어줌
+print('정확도: ', sess.run(accuracy, feed_dict={X: mnist.test.images,
+                                             Y: mnist.test.labels,
+                                             keep_prob: 1}))
+
+# 드롭아웃 기법을 적용한뒤 학습을 진행해보면 드롭아웃을 적용하지 않을떄와 별 차이 없음
+# 이유는 드롭아웃 방식으로 인해 학습이 느리게 진행되었기 때문 그렇다면 학습 세대(epoch)를
+# 30번으로 늘려 학습을 해보면 결과가 더 좋게 나옴.
+
+
+''' 배치 정규화 '''
+# 이 기법은 과적합을 막아줄 뿐아니라 학습속도도 향상시켜주는 장점으로 드롭아웃보다 자주사용됨.
+# tf.nn.batch_nomalization 과 tf.layers.batch_normalization 함수로 쉽게 적용가능
+
+
+
+'''matplotlib'''
+
+import matplotlib.pyplot as plt
+
+
+# 테스트 데이터를 이용해 예측 모델을 실행하고 결괏값을 labels에 저장
+labels = sess.run(model, feed_dict={X: mnist.test.images,
+                                    Y: mnist.test.labels,
+                                    keep_prob: 1})
+
+# 그런 다음 손글씨를 출력할 그래프를 준비
+fig = plt.figure()
+
+# 테스트 데이터의 첫번째부터 열번째까지의 이미지와 예측한 값을 출력
+for i in range(10):
+    # 2행 5열의 그래프를 만들고, i+1번째에 숫자이미지를 출력
+    subplot = fig.add_subplot(2, 5, i+1)
+    # 이미지를 깨끗하게 출력하기 위해 x와 y의 눈금을 출력하지 않음
+    subplot.set_xticks([])
+    subplot.set_yticks([])
+    # 출력한 이미지 위에 예측한 숫자 출력
+    # np.argmax는 tf.argmax와 같은 기능의 함수
+    # 결과값인 labels의 i번째 요소가 원-핫 인코딩형식으로 되어있으므로 해당 배열에서 가장 높은 값을 가진 인덱스를 예측한 숫자로 출력
+    subplot.set_title('%d' % np.argmax(labels[i]))
+    # 1차원 배열로 되어있는 i번째 이미지 데이터를 28x28형식의 2차원 배열로 변형하여 이미지 형태로 출력
+    # cmap 파라미터를 통해 이미지를 그레이스케일로 출력
+    subplot.imshow(mnist.test.images[i].reshape((28,28)),
+                   cmap=plt.cm.gray_r)
+
+plt.show()
 
